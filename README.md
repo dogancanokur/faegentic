@@ -12,8 +12,9 @@ Yeni bir Unreal Engine özelliği istediğinizde kullanılır. Akış şöyledir
 
 1. Projeyi ve isteği inceleyip uygulanabilir bir plan hazırlar.
 2. İşi küçük, bağımsız alt özelliklere böler.
-3. Her parçayı `gpt-6-luna` modeli ve `max` reasoning kullanan subagent’larla uygular.
-4. Her tamamlanan alt özelliği ayrı commit’ler; sonunda “review’e hazır” diye bildirir.
+3. Ana agent, her alt özellik için uygulanacak adımları, dosya sınırlarını ve kabul ölçütlerini içeren subplanı hazırlar.
+4. Hazır subplanı `gpt-6-luna` modeli ve `max` reasoning kullanan subagent’a vererek parçayı uygulatır.
+5. Her tamamlanan alt özelliği ayrı commit’ler; sonunda “review’e hazır” diye bildirir.
 
 Bir parçanın akışı Luna’yı aşarsa daha büyük modele geçmeden önce sizden onay ister. Tam davranış kuralları [SKILL.md](SKILL.md) dosyasındadır.
 
