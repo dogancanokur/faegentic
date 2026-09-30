@@ -6,8 +6,9 @@ Unreal Engine projelerinde yeni özellik geliştirmek için hazırlanmış bir C
 
 - **Standart:** [SKILL.md](SKILL.md). Plan, ana agent tarafından yazılan subplanlar, Luna alt ajanları ve alt özellik commit’leri.
 - **Beyinli:** [beyinli/SKILL.md](beyinli/SKILL.md). Standart akışa ek olarak planı ve aşamaları Beyin’e kaydeder; feature ve alt task sınırlarında kullanım limitini kontrol eder, durursa devam notu bırakır.
+- **Beyinli + öğretici:** [beyinli-ogretici/SKILL.md](beyinli-ogretici/SKILL.md). Beyinli akışa C++/Blueprint sorumluluk sözleşmesi ve ana agent'ın feature sonunda hazırladığı ownership handoff'u ekler. Veri akışı, Blueprint bağlantıları, kullanılan Unreal C++ kavramları ve manuel Editor testleri açıklanır. Bu varyant yalnız açık çağrıyla etkinleşir.
 
-Her iki dosyanın skill adı `faegentic`tir. Kullanacağınız sürümün dosyasını yerel `faegentic/SKILL.md` konumuna koyun. Beyinli sürüm için çalışan bir Beyin kurulumu ve `beyin` skill’i gerekir.
+Üç varyantın skill adı `faegentic`tir. Seçtiğiniz varyantı yerel `faegentic` klasörüne kurun; öğretici varyantın `references` ve `agents` dosyaları da gereklidir. Beyinli varyantlar için çalışan bir Beyin kurulumu ve `beyin` skill’i gerekir.
 
 ## Neden yapıldı?
 
@@ -59,6 +60,48 @@ curl -fsSL https://raw.githubusercontent.com/dogancanokur/faegentic/main/beyinli
 ```
 
 Özel bir `CODEX_HOME` kullanıyorsanız hedefi `$CODEX_HOME/skills/faegentic` olarak uyarlayın. Yalnızca bir sürümü etkin tutun ve kurulumdan sonra Codex’te yeni bir oturum açın. Beyinli sürümü güncellemek için indirme komutunu yeniden çalıştırın.
+
+### Beyinli + öğretici varyantı kurma
+
+Bu varyantın üç dosyasını birlikte indirin. Mevcut yerel skill'inizi değiştirecekseniz önce yedeğini alın.
+
+**Windows (PowerShell)**
+
+```powershell
+$skillDir = "$env:USERPROFILE\.codex\skills\faegentic"
+$variantUrl = 'https://raw.githubusercontent.com/dogancanokur/faegentic/main/beyinli-ogretici'
+foreach ($relativeFile in @('SKILL.md', 'references/ownership-handoff.md', 'agents/openai.yaml')) {
+    $targetFile = Join-Path $skillDir $relativeFile
+    New-Item -ItemType Directory -Force (Split-Path $targetFile -Parent) | Out-Null
+    Invoke-WebRequest "$variantUrl/$relativeFile" -OutFile $targetFile
+}
+```
+
+**macOS / Linux**
+
+```bash
+skill_dir="${CODEX_HOME:-$HOME/.codex}/skills/faegentic"
+variant_url='https://raw.githubusercontent.com/dogancanokur/faegentic/main/beyinli-ogretici'
+mkdir -p "$skill_dir/references" "$skill_dir/agents"
+for relative_file in SKILL.md references/ownership-handoff.md agents/openai.yaml; do
+  curl -fsSL "$variant_url/$relative_file" -o "$skill_dir/$relative_file" || exit 1
+done
+```
+
+Özel bir `CODEX_HOME` için PowerShell'de de `$skillDir` hedefini uyarlayın. Kurulumdan sonra yeni bir Codex oturumu açın. Aynı üç dosyayı indirerek varyantı güncelleyebilirsiniz.
+
+### Öğretici varyantın mod komutları
+
+Komutları Codex sohbetine yazın; bunlar terminal veya yerleşik slash komutları değildir.
+
+| Sohbet komutu | Sonuç |
+| --- | --- |
+| `$faegentic off` | Bu sohbette Faegentic akışını kapatır; normal agent çalışmasına döner. |
+| `normal çalış` veya `normal moda geç` | Aynı kapatma işlemi; Beyin profilini değiştirmez. |
+| `$faegentic on` | Bu sohbet için akışı açar; tek başına yeni feature başlatmaz. |
+| `$faegentic <feature açıklaması>` | Akışı açar ve belirtilen feature'ı başlatır. |
+
+Mod başka sohbetlere uygulanmış sayılmaz. Kapatma mevcut kodu veya kurulu skill dosyalarını silmez. Beyin ekonomik/normal ayarı ayrı yönetilir.
 
 ## Kullanım
 

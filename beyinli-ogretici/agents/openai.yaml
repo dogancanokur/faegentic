@@ -1,0 +1,5 @@
+interface:
+  display_name: "Faegentic · Beyinli + öğretici"
+  short_description: "UE feature akışı, minimum API ve öğretici devir"
+policy:
+  allow_implicit_invocation: false
