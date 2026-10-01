@@ -49,7 +49,7 @@ Ek seçenekler (sıra önemli değil):
 | --- | --- | --- |
 | `tutor on/off` | `on` | `learn.md` üretir |
 | `docs on/off` | `on` | `Docs/<feature>-<tarih>/` üretir |
-| `effort <seviye>` | `max` | Yazıcının reasoning seviyesi |
+| `effort <seviye>` | tier'a göre | Yazıcının reasoning seviyesini tüm alt işler için sabitler |
 | `parallel on/off` | `off` | Bağımsız alt işleri ayrı worktree'lerde paralel yazdırır |
 
 Örnek:
