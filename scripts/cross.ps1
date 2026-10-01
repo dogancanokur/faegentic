@@ -33,7 +33,8 @@ $logFile = Join-Path $outDir "$Role-$n.log"
 
 $preambleName = if ($Role -eq 'review') { 'reviewer-preamble.md' } else { 'writer-preamble.md' }
 $preamble = Get-Content -Raw (Join-Path $skillDir "references/$preambleName")
-$prompt = $preamble + "`n`n---`n`n" + (Get-Content -Raw $briefPath)
+$rules = Get-Content -Raw (Join-Path $skillDir 'references/unreal-rules.md')
+$prompt = $preamble, $rules, (Get-Content -Raw $briefPath) -join "`n`n---`n`n"
 
 $started = Get-Date
 "[$started] to=$To role=$Role model=$Model effort=$Effort dir=$workDir" | Set-Content $logFile

@@ -1,178 +1,123 @@
 ---
 name: faegentic-x
-description: Use when the user invokes `faegentic-x` for an Unreal Engine feature and wants it planned by the current agent (Claude Opus or GPT-Sol), implemented by the opposite model family through a headless CLI bridge, reviewed by the orchestrator's own family, committed by subfeature, and prepared for review.
+description: Orchestrates Unreal Engine feature work across two model families. The current agent (Claude Opus or GPT-Sol) plans, the opposite family implements through a headless CLI bridge, the orchestrator's family reviews, and each subfeature is committed. Use only when the user invokes `faegentic-x` (or misspellings like `faegenctic-x`, `faegentix`).
 ---
 
 # faegentic-x
 
-Cross-model Unreal Engine feature workflow. The agent that loads this skill is the **orchestrator**. Every subtask is written by one model family and reviewed by the other.
+You are the **orchestrator**: you plan, decide architecture, build, and commit. Writers implement; reviewers check.
 
-Usage:
+## Commands
 
-`faegentic-x on <feature>` → cross mode (default)
-`faegentic-x on <feature> claude` → full Claude: Claude writes and reviews
-`faegentic-x on <feature> gpt` → full GPT: GPT writes and reviews
-`faegentic-x off`
-`faegentic-x on <feature> tutor off docs on effort high`
+```
+faegentic-x on <feature>                 cross mode (default)
+faegentic-x on <feature> claude          family lock: Claude writes and reviews
+faegentic-x on <feature> gpt             family lock: GPT writes and reviews
+faegentic-x on <feature> tutor off docs on effort high
+faegentic-x off                          return to the normal workflow
+```
 
-Also accept common misspellings of the trigger (`faegenctic-x`, `faegentix`).
-
-## Family lock
-
-If the last word of the request is `claude` or `gpt`, it is a family lock, not part of the feature name. Under a lock:
-
-- Writer and reviewer are both the locked family. The cross rule below does not apply.
-- If the locked family is your own family, use native subagents for both roles; do not call `cross.ps1` and skip the cross CLI preflight check. Give the native writer `references/writer-preamble.md` + the brief, and the native reviewer `references/reviewer-preamble.md` + the review input.
-- If the locked family is the opposite family, use `cross.ps1 -Role write|fix|review` for both roles.
-- Commit format uses the same model twice: `[claude-opus-5-5 max / review claude-opus-5-5]`.
-- Ignore the `writer` option.
-
-Options and defaults:
+If the last word is `claude` or `gpt`, it is a family lock, not part of the feature name.
 
 | Option | Default | Meaning |
 | --- | --- | --- |
 | `tutor` | `on` | Create `learn.md` |
 | `docs` | `on` | Create feature docs |
-| `writer` | opposite family | Force writer family: `gpt` or `claude` |
+| `writer` | opposite family | Force writer family (`gpt` or `claude`). Ignored under a family lock |
 | `effort` | `max` | Writer reasoning effort |
-| `parallel` | `off` | Allow parallel writers in separate worktrees |
+| `parallel` | `off` | Parallel writers in separate worktrees |
 
-## Roles
+## Who writes and who reviews
 
-Identify your own family first. If you are Claude, your family is `claude`. If you are a GPT model running in Codex, your family is `gpt`.
+Your family: `claude` if you are Claude, `gpt` if you are a GPT model in Codex.
 
-| Role | Who | How |
+| Mode | Writer | Reviewer |
 | --- | --- | --- |
-| Orchestrator | You | Plans, writes briefs, decides architecture, integrates, builds, commits |
-| Writer | Opposite family | `scripts/cross.ps1 -To <family> -Role write` |
-| Reviewer | Your family | Native subagent with fresh context |
+| Default | Opposite family, bridge | Own family, native |
+| `writer` = own family | Own family, native | Opposite family, bridge |
+| Lock = own family | Own family, native | Own family, native |
+| Lock = opposite family | Opposite family, bridge | Opposite family, bridge |
 
-Models:
+Outside a lock, the writer and reviewer of one subtask are never the same family.
 
-| Family | Writer model | Reviewer model |
-| --- | --- | --- |
-| `gpt` | `gpt-6.1-sol` | `gpt-6.1-sol` |
-| `claude` | `claude-opus-5-5` | `claude-opus-5-5` |
+**Bridge**: `pwsh -NoProfile -File <skill-dir>/scripts/cross.ps1 -To <family> -Role write|fix|review -Brief <file> -Dir <repo-or-worktree> -Effort <effort>`. It prepends the role preamble and `references/unreal-rules.md` itself. Output lands next to the brief as `<role>-<n>.md` and `<role>-<n>.log`.
 
-Reviewer invocation:
+- Claude Code: run it with `run_in_background: true`; runs can exceed 10 minutes.
+- Codex: set the shell timeout to at least 1800 seconds.
 
-- Claude orchestrator: `Agent` tool, `subagent_type: "general-purpose"`, `model: "opus"`.
-- GPT orchestrator: Codex subagent, `model: "gpt-6.1-sol"`, `reasoning_effort: "max"`.
+**Native**: a fresh-context subagent.
 
-Outside a family lock, the writer and reviewer of one subtask must never be the same family. If the `writer` option forces your own family, the reviewer becomes the opposite family through `cross.ps1 -Role review`.
+- Claude: `Agent` tool, `subagent_type: "general-purpose"`, `model: "opus"`.
+- GPT: Codex subagent, `model: "gpt-6.1-sol"`, `reasoning_effort: "max"`.
+- Writer prompt: `references/writer-preamble.md` + `references/unreal-rules.md` + the brief.
+- Reviewer prompt: `references/reviewer-preamble.md` + `references/unreal-rules.md` + the review input.
+
+Models: `gpt` → `gpt-6.1-sol`, `claude` → `claude-opus-5-5`.
 
 ## Preflight
 
 Run once per feature, before planning:
 
-1. Confirm the cross CLI responds: `codex --version` or `claude --version`.
-2. Confirm the working tree is clean or that the user accepts the existing changes.
-3. Add `.faegentic/` to `.git/info/exclude` if missing. Do not edit the project's `.gitignore` for this.
-
-If the cross CLI is missing, not logged in, or out of quota, stop and tell the user. Do not silently fall back to your own family.
+1. If any role uses the bridge, confirm the opposite CLI responds: `codex --version` or `claude --version`. If it is missing, logged out, or out of quota, stop and tell the user.
+2. Confirm the working tree is clean, or that the user accepts the existing changes.
+3. Add `.faegentic/` to `.git/info/exclude` if missing. Do not edit `.gitignore`.
 
 ## Workflow
 
-1. Inspect `AGENTS.md` / `CLAUDE.md`, Git state, Unreal project structure, and relevant code.
+Copy this checklist and track it per subtask:
 
-2. Present a short plan: feature goal, scope, dependencies, risks, subtasks. Proceed without further approval unless a central architectural decision is open.
+```
+- [ ] Brief written
+- [ ] Writer run
+- [ ] Ownership checked
+- [ ] Review PASS (fix rounds: 0/2)
+- [ ] Build + tests run
+- [ ] Committed
+```
 
-3. Make central architectural decisions yourself before delegating. Writers implement; they do not decide architecture. If you cannot decide with confidence, ask the user.
-
-4. For each subtask, write a brief to `.faegentic/<feature>/<NN>-<subtask>/brief.md` using `references/brief-template.md`. The brief must include:
-   - goal
-   - implementation steps
-   - file ownership (exact paths the writer may touch)
-   - interfaces it must match (signatures, delegates, UPROPERTY names)
-   - acceptance criteria
-   - commit scope
-
-5. **Write.** Run the writer:
-
-   ```
-   pwsh -NoProfile -File <skill-dir>/scripts/cross.ps1 -To <opposite> -Role write -Brief <brief.md> -Dir <repo-or-worktree> -Effort <effort>
-   ```
-
-   - Claude Code: run it with `run_in_background: true`; writer runs can exceed 10 minutes.
-   - Codex: give the shell call a timeout of at least 1800 seconds.
-   - Output lands next to the brief: `write-1.md` (writer report) and `write-1.log`.
-
-6. **Check ownership.** Run `git status --porcelain` in the writer's directory. If any file outside the brief's ownership list changed, revert those files and record it in the review input.
-
-7. **Review.** Start the reviewer with `references/review-template.md`, filled with: the brief, `git diff` of the subtask, and the writer report. The reviewer returns `PASS` or `CHANGES` with numbered findings (file, line, cause, fix). Save it as `review-<n>.md`.
-
-8. **Fix loop.** On `CHANGES`, write the findings into `fix-<n>.md` and run `cross.ps1 -Role fix -Brief <fix-n.md>` against the same directory, then review again. Maximum 2 fix rounds. After that, stop and show the user the open findings.
-
-9. **Verify.** You build and test, not the writer. Compile the affected module (UBT or editor build) and run existing automation tests that cover the change. Record what actually ran.
-
-10. **Commit** each completed subfeature yourself:
+1. Read `AGENTS.md` / `CLAUDE.md`, Git state, the Unreal project structure, and relevant code.
+2. Present a short plan: goal, scope, dependencies, risks, subtasks. Continue without approval unless a central architectural decision is open; then ask the user.
+3. Make all architectural decisions yourself before delegating.
+4. **Brief.** Write `.faegentic/<feature>/<NN>-<subtask>/brief.md` from `references/brief-template.md`. Fill every section; file ownership lists exact paths.
+5. **Write.** Run the writer (bridge or native, per the table).
+6. **Ownership.** Run `git status --porcelain` in the writer's directory. Revert any file outside the ownership list and record it in the review input.
+7. **Review.** Fill `references/review-template.md` with the brief, the writer report, and `git diff` of the subtask. Run the reviewer. Save its reply as `review-<n>.md`.
+8. **Fix.** On `CHANGES`, copy the findings into `fix-<n>.md` and run the writer with `-Role fix` on the same directory, then review again. After 2 fix rounds, stop and show the user the open findings.
+9. **Verify.** Build the affected module (UBT or editor build) and run existing automation tests that cover the change. Record what actually ran.
+10. **Commit** the subfeature yourself:
 
     `feature. <main feature> - [<writer-model> <effort> / review <reviewer-model>] - [<subfeature> - <work completed>]`
 
-    Example:
+    Example: `feature. door interaction - [gpt-6.1-sol max / review claude-opus-5-5] - [E open/close interaction - door interaction added]`
 
-    `feature. door interaction - [gpt-6.1-sol max / review claude-opus-5-5] - [E open/close interaction - door interaction added]`
+    Under a lock both models are the same: `[claude-opus-5-5 max / review claude-opus-5-5]`.
 
-11. After all subtasks, review the full feature diff yourself and report validation actually performed. Do not present incomplete work as complete.
+11. After all subtasks, review the full feature diff yourself.
 
 ## Parallel writers
 
-Default is sequential. With `parallel on`:
+Only with `parallel on`:
 
-- Only run subtasks with disjoint file ownership and no interface dependency.
-- Give each writer its own worktree: `git worktree add .faegentic/wt/<NN> -b fx/<feature>/<NN>`.
-- Integrate by applying each worktree diff into the main checkout, review per subtask, then remove the worktree.
-- Never let two writers touch the same file.
+- Run in parallel only subtasks with disjoint file ownership and no interface dependency.
+- One worktree per writer: `git worktree add .faegentic/wt/<NN> -b fx/<feature>/<NN>`.
+- Review per subtask, apply each worktree diff to the main checkout, then remove the worktree.
 
-## Implementation rules (passed to writers through the brief)
+## Docs and tutor
 
-Follow Unreal Engine coding standards and the existing project architecture.
+`docs on`: write to `Docs/<feature>-<date-time>/` (create `Docs/` if missing). Only files that carry information:
 
-Avoid unnecessary abstractions, refactors, or speculative APIs.
+- `README.md`: summary and architectural flow
+- `api.md`: important C++ and Blueprint API
+- `learn.md`: only with `tutor on`; the three most important C++/Unreal concepts actually used in this feature
+- `decisions.md`: architectural decisions, when there are any
+- `crossreview.md`: per subtask, writer model, reviewer model, fix rounds, findings that changed the code
 
-C++ owns reusable systems, state integrity, validation, low-level logic, and replication rules when applicable.
+Do not duplicate Git history. `.faegentic/` is scratch, not documentation. `docs off`: create no docs. `tutor off`: no `learn.md`.
 
-Blueprint owns gameplay orchestration, sequencing, system connections, animation, sound, VFX, and designer-driven behavior.
+## Rules
 
-C++ exposes a minimal Blueprint-ready API. Expose only:
-
-- gameplay actions
-- read-only queries
-- meaningful events/delegates
-- designer-tunable properties
-
-Do not expose internal implementation details to Blueprint.
-
-If the project has test infrastructure and the feature can be tested automatically, add tests. Otherwise, do not create test infrastructure; list the Unreal Editor or PIE validation steps instead.
-
-Add comments only when intent or Unreal-specific behavior is not clear from the code.
-
-## Tutor
-
-If `tutor on`, create `learn.md` in the feature docs folder with the three most important C++ or Unreal concepts from this feature. Only concepts directly used in the feature. If `tutor off`, create no tutorial output.
-
-## Documentation
-
-If `docs on`, use the project's `Docs` directory (create it if missing). Per feature: `Docs/<feature>-<date-time>/` with only useful files:
-
-- `README.md` → summary and architectural flow
-- `api.md` → important C++ and Blueprint API
-- `learn.md` → only when `tutor on`
-- `decisions.md` → architectural decisions, when applicable
-- `crossreview.md` → per subtask: writer model, reviewer model, number of fix rounds, findings that changed the code
-
-Do not document every subtask or temporary detail. Do not duplicate Git history. `.faegentic/` run files are scratch and are not documentation.
-
-If `docs off`, do not create or update feature docs.
-
-## General Rules
-
-After `faegentic-x off`, return to the normal agent workflow.
-
-Explicit user instructions take priority over this workflow.
-
-Demo pressure or a request for speed does not remove planning, cross review, or verification.
-
-Never switch writer or reviewer model silently. If a model is unavailable, stop and ask.
-
-When the feature is complete, summarize: completed work, commits, fix rounds per subtask, validation performed, remaining Blueprint or Unreal Editor steps.
+- Explicit user instructions override this workflow.
+- Speed or demo pressure does not remove planning, cross review, or verification.
+- Never switch the writer or reviewer model silently. If a model is unavailable, stop and ask.
+- Do not present incomplete work as complete.
+- At the end, report: completed work, commits, fix rounds per subtask, validation actually run, remaining Blueprint or Editor steps.
