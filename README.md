@@ -104,6 +104,7 @@ pwsh -NoProfile -File ~/.claude/skills/faegentic-x/scripts/cross.ps1 -To claude 
 | `SKILL.md` | Akış kuralları, roller, aile kilidi, commit ve docs kuralları |
 | `scripts/cross.ps1` | Karşı aileyi headless çağıran köprü (`write`, `fix`, `review`) |
 | `references/brief-template.md` | Orkestratörün her alt iş için doldurduğu brief |
+| `references/unreal-rules.md` | C++/Blueprint ayrımı ve section banner kuralları (yazıcı + denetçi) |
 | `references/writer-preamble.md` | Yazıcı kuralları ve rapor biçimi |
 | `references/reviewer-preamble.md` | Denetçi kontrol listesi ve `PASS` / `CHANGES` biçimi |
 | `references/review-template.md` | Denetçiye giden girdi |
