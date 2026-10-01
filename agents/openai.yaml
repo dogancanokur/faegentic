@@ -1,0 +1,6 @@
+interface:
+  display_name: "Faegentic X"
+  short_description: "UE feature: karşı model yazar, kendi ailen denetler"
+  default_prompt: "Use $faegentic-x on <feature details>."
+policy:
+  allow_implicit_invocation: false

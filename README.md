@@ -1,122 +1,121 @@
-# faegentic
+# faegentic-x
 
-Unreal Engine projelerinde yeni özellik geliştirmek için hazırlanmış bir Codex skill’i. `faegentic` komutu kullanıldığında işi önce planlar, ardından küçük alt özelliklere ayırarak Luna subagent’larına dağıtır.
+Unreal Engine feature'larını iki model ailesiyle çaprazlama geliştiren bir agent skill'i. Claude Code'da da Codex'te de aynı dosyayla çalışır.
 
-## Sürümler
+- Hangi ajanla başlatırsan o **orkestratör** olur: planlar, mimari kararı verir, build alır, commit atar.
+- Kodu **karşı aile** yazar (Claude başlattıysa GPT, GPT başlattıysa Claude).
+- Yazılan kodu **orkestratörün ailesi** denetler.
 
-- **Standart:** [SKILL.md](SKILL.md). Plan, ana agent tarafından yazılan subplanlar, Luna alt ajanları ve alt özellik commit’leri.
-- **Beyinli:** [beyinli/SKILL.md](beyinli/SKILL.md). Standart akışa ek olarak planı ve aşamaları Beyin’e kaydeder; feature ve alt task sınırlarında kullanım limitini kontrol eder, durursa devam notu bırakır.
-- **Beyinli + öğretici:** [beyinli-ogretici/SKILL.md](beyinli-ogretici/SKILL.md). Beyinli akışa C++/Blueprint sorumluluk sözleşmesi ve ana agent'ın feature sonunda hazırladığı ownership handoff'u ekler. Veri akışı, Blueprint bağlantıları, kullanılan Unreal C++ kavramları ve manuel Editor testleri açıklanır. Bu varyant yalnız açık çağrıyla etkinleşir.
+Böylece her alt özellik, yazandan farklı bir modelin gözünden geçer.
 
-Üç varyantın skill adı `faegentic`tir. Seçtiğiniz varyantı yerel `faegentic` klasörüne kurun; öğretici varyantın `references` ve `agents` dosyaları da gereklidir. Beyinli varyantlar için çalışan bir Beyin kurulumu ve `beyin` skill’i gerekir.
+## Akış
 
-## Neden yapıldı?
-
-Büyük bir özelliği tek seferde kodlamak, hangi parçanın tamamlandığını ve neyin inceleneceğini belirsizleştirebilir. faegentic; planı görünür kılmak, alt özellikleri ayrı commit’lerle izlemek ve tamamlanan işi review’e hazır halde sunmak için oluşturuldu.
-
-## Ne için kullanılır?
-
-Yeni bir Unreal Engine özelliği istediğinizde kullanılır. Akış şöyledir:
-
-1. Projeyi ve isteği inceleyip uygulanabilir bir plan hazırlar.
-2. İşi küçük, bağımsız alt özelliklere böler.
-3. Ana agent, her alt özellik için uygulanacak adımları, dosya sınırlarını ve kabul ölçütlerini içeren subplanı hazırlar.
-4. Hazır subplanı `gpt-6-luna` modeli ve `max` reasoning kullanan subagent’a vererek parçayı uygulatır.
-5. Her tamamlanan alt özelliği ayrı commit’ler; sonunda “review’e hazır” diye bildirir.
-
-Bir parçanın akışı Luna’yı aşarsa daha büyük modele geçmeden önce sizden onay ister. Ayrıntılı kurallar seçtiğiniz sürümün SKILL.md dosyasındadır.
-
-## Kurulum
-
-Codex skill’leri `~/.codex/skills` klasöründen yüklenir. Git ve Codex’in subagent desteği gerekir; Luna modelinin `max` reasoning seçeneği hesabınızda kullanılabilir olmalıdır.
-
-**Windows (PowerShell)**
-
-```powershell
-git clone https://github.com/dogancanokur/faegentic.git "$env:USERPROFILE\.codex\skills\faegentic"
+```
+Orkestratör (Opus 5.5 veya GPT-6.1-Sol)
+  │  plan + mimari kararlar
+  │
+  ├─ alt iş 01 ── brief.md
+  │     ├─ yazıcı   : karşı aile  (scripts/cross.ps1 → codex exec / claude -p)
+  │     ├─ denetçi  : kendi ailen (native subagent, temiz context)
+  │     ├─ CHANGES ise düzeltme turu (en fazla 2)
+  │     └─ orkestratör build + test → commit
+  │
+  ├─ alt iş 02 ...
+  └─ son diff incelemesi + docs
 ```
 
-**macOS / Linux**
-
-```bash
-git clone https://github.com/dogancanokur/faegentic.git ~/.codex/skills/faegentic
-```
-
-Bu komutlar **standart sürümü** kurar. **Beyinli sürüm** için onun SKILL.md dosyasını doğrudan indirin:
-
-**Windows (PowerShell)**
-
-```powershell
-$skillDir = "$env:USERPROFILE\.codex\skills\faegentic"
-New-Item -ItemType Directory -Force $skillDir | Out-Null
-Invoke-WebRequest "https://raw.githubusercontent.com/dogancanokur/faegentic/main/beyinli/SKILL.md" -OutFile (Join-Path $skillDir "SKILL.md")
-```
-
-**macOS / Linux**
-
-```bash
-mkdir -p ~/.codex/skills/faegentic
-curl -fsSL https://raw.githubusercontent.com/dogancanokur/faegentic/main/beyinli/SKILL.md -o ~/.codex/skills/faegentic/SKILL.md
-```
-
-Özel bir `CODEX_HOME` kullanıyorsanız hedefi `$CODEX_HOME/skills/faegentic` olarak uyarlayın. Yalnızca bir sürümü etkin tutun ve kurulumdan sonra Codex’te yeni bir oturum açın. Beyinli sürümü güncellemek için indirme komutunu yeniden çalıştırın.
-
-### Beyinli + öğretici varyantı kurma
-
-Bu varyantın üç dosyasını birlikte indirin. Mevcut yerel skill'inizi değiştirecekseniz önce yedeğini alın.
-
-**Windows (PowerShell)**
-
-```powershell
-$skillDir = "$env:USERPROFILE\.codex\skills\faegentic"
-$variantUrl = 'https://raw.githubusercontent.com/dogancanokur/faegentic/main/beyinli-ogretici'
-foreach ($relativeFile in @('SKILL.md', 'references/ownership-handoff.md', 'agents/openai.yaml')) {
-    $targetFile = Join-Path $skillDir $relativeFile
-    New-Item -ItemType Directory -Force (Split-Path $targetFile -Parent) | Out-Null
-    Invoke-WebRequest "$variantUrl/$relativeFile" -OutFile $targetFile
-}
-```
-
-**macOS / Linux**
-
-```bash
-skill_dir="${CODEX_HOME:-$HOME/.codex}/skills/faegentic"
-variant_url='https://raw.githubusercontent.com/dogancanokur/faegentic/main/beyinli-ogretici'
-mkdir -p "$skill_dir/references" "$skill_dir/agents"
-for relative_file in SKILL.md references/ownership-handoff.md agents/openai.yaml; do
-  curl -fsSL "$variant_url/$relative_file" -o "$skill_dir/$relative_file" || exit 1
-done
-```
-
-Özel bir `CODEX_HOME` için PowerShell'de de `$skillDir` hedefini uyarlayın. Kurulumdan sonra yeni bir Codex oturumu açın. Aynı üç dosyayı indirerek varyantı güncelleyebilirsiniz.
-
-### Öğretici varyantın mod komutları
-
-Komutları Codex sohbetine yazın; bunlar terminal veya yerleşik slash komutları değildir.
-
-| Sohbet komutu | Sonuç |
-| --- | --- |
-| `$faegentic off` | Bu sohbette Faegentic akışını kapatır; normal agent çalışmasına döner. |
-| `normal çalış` veya `normal moda geç` | Aynı kapatma işlemi; Beyin profilini değiştirmez. |
-| `$faegentic on` | Bu sohbet için akışı açar; tek başına yeni feature başlatmaz. |
-| `$faegentic <feature açıklaması>` | Akışı açar ve belirtilen feature'ı başlatır. |
-
-Mod başka sohbetlere uygulanmış sayılmaz. Kapatma mevcut kodu veya kurulu skill dosyalarını silmez. Beyin ekonomik/normal ayarı ayrı yönetilir.
+| Rol | Claude ile başlatınca | Codex ile başlatınca |
+| --- | --- | --- |
+| Orkestratör | `claude-opus-5-5` | `gpt-6.1-sol` |
+| Yazıcı | `gpt-6.1-sol` (`codex exec`) | `claude-opus-5-5` (`claude -p`) |
+| Denetçi | Claude subagent | Codex subagent |
 
 ## Kullanım
 
-Unreal Engine projenizin klasöründe Codex’e örneğin şunu yazın:
+Unreal projenin klasöründe ajana yaz:
+
+| Komut | Yazan | Denetleyen |
+| --- | --- | --- |
+| `faegentic-x on kapı etkileşimi` | Karşı aile | Kendi ailen |
+| `faegentic-x on kapı etkileşimi claude` | Claude | Claude |
+| `faegentic-x on kapı etkileşimi gpt` | GPT | GPT |
+| `faegentic-x off` | Normal ajan akışına döner | |
+
+Son kelime `claude` veya `gpt` ise feature adına dahil edilmez; o aileyi kilitler. Kendi ailen kilitliyse karşı CLI hiç çağrılmaz.
+
+Ek seçenekler (sıra önemli değil):
+
+| Seçenek | Varsayılan | Etki |
+| --- | --- | --- |
+| `tutor on/off` | `on` | `learn.md` üretir |
+| `docs on/off` | `on` | `Docs/<feature>-<tarih>/` üretir |
+| `effort <seviye>` | `max` | Yazıcının reasoning seviyesi |
+| `parallel on/off` | `off` | Bağımsız alt işleri ayrı worktree'lerde paralel yazdırır |
+
+Örnek:
 
 ```text
-$faegentic Kapılara E tuşuyla etkileşim ekle. Kilitli kapılar anahtar gerektirsin.
+faegentic-x on Kapılara E tuşuyla etkileşim ekle, kilitli kapılar anahtar istesin. tutor off
 ```
 
-Planı inceleyebilir, alt özelliklerin ayrı commit’lerini review edebilirsiniz. Commit biçimi:
+Commit biçimi:
 
 ```text
-feature. <ana özellik> - [luna max] - [<alt özellik> - <yapılan iş>]
+feature. <ana özellik> - [<yazıcı model> <effort> / review <denetçi model>] - [<alt özellik> - <yapılan iş>]
 ```
+
+## Gereksinimler
+
+- Git
+- PowerShell 7 (`pwsh`)
+- [Claude Code](https://claude.com/claude-code) ve [Codex CLI](https://github.com/openai/codex), ikisi de giriş yapılmış
+- Çapraz modda iki tarafın da kotası. Kota biterse skill durur ve sorar; sessizce diğer modele geçmez.
+
+## Kurulum
+
+Aynı repo iki ajanın skill klasörüne klonlanır.
+
+**Windows (PowerShell)**
+
+```powershell
+git clone https://github.com/dogancanokur/faegentic.git "$env:USERPROFILE\.claude\skills\faegentic-x"
+git clone https://github.com/dogancanokur/faegentic.git "$env:USERPROFILE\.codex\skills\faegentic-x"
+```
+
+**macOS / Linux**
+
+```bash
+git clone https://github.com/dogancanokur/faegentic.git ~/.claude/skills/faegentic-x
+git clone https://github.com/dogancanokur/faegentic.git ~/.codex/skills/faegentic-x
+```
+
+Kurduktan sonra iki ajanda da yeni oturum aç. Güncellemek için iki klasörde `git pull`.
+
+Köprüyü tek başına denemek için:
+
+```bash
+pwsh -NoProfile -File ~/.claude/skills/faegentic-x/scripts/cross.ps1 -To claude -Role write -Brief <brief.md> -Dir . -Effort low
+```
+
+## Dosyalar
+
+| Dosya | İş |
+| --- | --- |
+| `SKILL.md` | Akış kuralları, roller, aile kilidi, commit ve docs kuralları |
+| `scripts/cross.ps1` | Karşı aileyi headless çağıran köprü (`write`, `fix`, `review`) |
+| `references/brief-template.md` | Orkestratörün her alt iş için doldurduğu brief |
+| `references/writer-preamble.md` | Yazıcı kuralları ve rapor biçimi |
+| `references/reviewer-preamble.md` | Denetçi kontrol listesi ve `PASS` / `CHANGES` biçimi |
+| `references/review-template.md` | Denetçiye giden girdi |
+| `agents/openai.yaml` | Codex arayüz bilgisi |
+
+Çalışma dosyaları projede `.faegentic/` altına yazılır ve `.git/info/exclude` ile git dışında tutulur.
+
+## Bilinen notlar
+
+- Microsoft Store'dan kurulan `pwsh`, `AppData\Roaming` altındaki dosyaları göremez. Skill'i ev dizininde tut (`~/.claude/skills`, `~/.codex/skills`).
+- `claude -p` global hook'larını da yükler; yazıcı çıktısının başında hook mesajları görünebilir. Rapor bloğu (`## Report`) etkilenmez.
 
 ## Lisans
 
-[MIT](LICENSE).
+[MIT](LICENSE)
