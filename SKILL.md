@@ -24,7 +24,7 @@ If the last word is `claude` or `gpt`, it is a family lock, not part of the feat
 | `tutor` | `on` | Create `learn.md` |
 | `docs` | `on` | Create feature docs |
 | `writer` | opposite family | Force writer family (`gpt` or `claude`). Ignored under a family lock |
-| `effort` | `max` | Writer reasoning effort |
+| `effort` | per tier | Force writer reasoning effort for every subtask |
 | `parallel` | `off` | Parallel writers in separate worktrees |
 
 ## Who writes and who reviews
@@ -40,19 +40,37 @@ Your family: `claude` if you are Claude, `gpt` if you are a GPT model in Codex.
 
 Outside a lock, the writer and reviewer of one subtask are never the same family.
 
-**Bridge**: `pwsh -NoProfile -File <skill-dir>/scripts/cross.ps1 -To <family> -Role write|fix|review -Brief <file> -Dir <repo-or-worktree> -Effort <effort>`. It prepends the role preamble and `references/unreal-rules.md` itself. Output lands next to the brief as `<role>-<n>.md` and `<role>-<n>.log`.
+**Bridge**: `pwsh -NoProfile -File <skill-dir>/scripts/cross.ps1 -To <family> -Role write|fix|review -Brief <file> -Dir <repo-or-worktree> -Model <tier-model> -Effort <tier-effort>`. Always pass model and effort from the tier tables. It prepends the role preamble and `references/unreal-rules.md` itself. Output lands next to the brief as `<role>-<n>.md` and `<role>-<n>.log`.
 
 - Claude Code: run it with `run_in_background: true`; runs can exceed 10 minutes.
 - Codex: set the shell timeout to at least 1800 seconds.
 
 **Native**: a fresh-context subagent.
 
-- Claude: `Agent` tool, `subagent_type: "general-purpose"`, `model: "opus"`.
-- GPT: Codex subagent, `model: "gpt-6.1-sol"`, `reasoning_effort: "max"`.
+- Claude: `Agent` tool, `subagent_type: "general-purpose"`, `model: "sonnet"`, or `"opus"` where the tier table says Opus.
+- GPT: Codex subagent, model and `reasoning_effort` from the tier table.
 - Writer prompt: `references/writer-preamble.md` + `references/unreal-rules.md` + the brief.
 - Reviewer prompt: `references/reviewer-preamble.md` + `references/unreal-rules.md` + the review input.
 
-Models: `gpt` → `gpt-6.1-sol`, `claude` → `claude-opus-5-5`.
+## Subtask tiers
+
+While planning, assign every subtask one tier. The tier picks the writer model, effort, and reviewer.
+
+| Tier | Use for |
+| --- | --- |
+| `small` | Narrow, fully specified parts: boilerplate, getters, config, data types, Blueprint exposure, tests |
+| `core` | Main C++ or Blueprint-facing logic, multi-file work |
+| `risky` | Replication, threading, GC/UPROPERTY lifetime, save/load, state machines, changes to existing core systems |
+
+| Tier | `gpt` writer | `claude` writer | `gpt` reviewer | `claude` reviewer |
+| --- | --- | --- | --- | --- |
+| `small` | `gpt-6-luna` `max` | `claude-sonnet-5-5` `medium` | `gpt-6.1-sol` `medium` | `claude-sonnet-5-5` `high` |
+| `core` | `gpt-6.1-sol` `medium` | `claude-sonnet-5-5` `high` | `gpt-6.1-sol` `medium` | `claude-sonnet-5-5` `high` |
+| `risky` | `gpt-6.1-sol` `high` | `claude-sonnet-5-5` `high` | `gpt-6.1-sol` `high` | `claude-opus-5-5` `high` |
+
+The `effort` option, when given, overrides the writer's tier effort.
+
+**Escalation**: if a subtask still gets `CHANGES` after its first fix round, run the second fix round with the next tier's writer (`small` → `core`, `core` → `risky`). Record the escalation in the commit and in `crossreview.md`.
 
 ## Preflight
 
@@ -76,7 +94,7 @@ Copy this checklist and track it per subtask:
 ```
 
 1. Read `AGENTS.md` / `CLAUDE.md`, Git state, the Unreal project structure, and relevant code.
-2. Present a short plan: goal, scope, dependencies, risks, subtasks. Continue without approval unless a central architectural decision is open; then ask the user.
+2. Present a short plan: goal, scope, dependencies, risks, subtasks. Per subtask, one line: tier, writer model + effort, reviewer model, and why. The user may override any line. Continue without approval unless a central architectural decision is open; then ask the user.
 3. Make all architectural decisions yourself before delegating.
 4. **Brief.** Write `.faegentic/<feature>/<NN>-<subtask>/brief.md` from `references/brief-template.md`. Fill every section; file ownership lists exact paths.
 5. **Write.** Run the writer (bridge or native, per the table).
@@ -88,9 +106,9 @@ Copy this checklist and track it per subtask:
 
     `feature. <main feature> - [<writer-model> <effort> / review <reviewer-model>] - [<subfeature> - <work completed>]`
 
-    Example: `feature. door interaction - [gpt-6.1-sol max / review claude-opus-5-5] - [E open/close interaction - door interaction added]`
+    Example: `feature. door interaction - [gpt-6.1-sol medium / review claude-sonnet-5-5] - [E open/close interaction - door interaction added]`
 
-    Under a lock both models are the same: `[claude-opus-5-5 max / review claude-opus-5-5]`.
+    Under a lock both models come from the same family: `[claude-sonnet-5-5 high / review claude-sonnet-5-5]`.
 
 11. After all subtasks, review the full feature diff yourself.
 
@@ -110,9 +128,24 @@ Only with `parallel on`:
 - `api.md`: important C++ and Blueprint API
 - `learn.md`: only with `tutor on`; the three most important C++/Unreal concepts actually used in this feature
 - `decisions.md`: architectural decisions, when there are any
-- `crossreview.md`: per subtask, writer model, reviewer model, fix rounds, findings that changed the code
+- `crossreview.md`: per subtask, tier, writer model, reviewer model, fix rounds, escalations, findings that changed the code
+- `blueprint.md`: see Blueprint guide
 
-Do not duplicate Git history. `.faegentic/` is scratch, not documentation. `docs off`: create no docs. `tutor off`: no `learn.md`.
+Do not duplicate Git history. `.faegentic/` is scratch, not documentation. `docs off`: create no docs except `blueprint.md`. `tutor off`: no `learn.md`.
+
+## Blueprint guide
+
+Always create `blueprint.md`, even with `docs off`. With `docs off`, create `Docs/<feature>-<date-time>/blueprint.md` and nothing else there.
+
+It is the user's Editor checklist for the Blueprint side, followable without reading the C++ code. Numbered steps, only those this feature needs:
+
+1. Blueprint assets to create or open: content path, parent class
+2. Components to add and property values to set (exact names, suggested values)
+3. Node wiring per event, in order: which event, which C++ function or delegate, what connects where
+4. Animation, sound, and VFX hookups
+5. PIE validation: what to do and the expected result
+
+Use the exact Blueprint-visible names from the C++ code. If no Blueprint work is needed, write that in one line.
 
 ## Rules
 
@@ -120,4 +153,4 @@ Do not duplicate Git history. `.faegentic/` is scratch, not documentation. `docs
 - Speed or demo pressure does not remove planning, cross review, or verification.
 - Never switch the writer or reviewer model silently. If a model is unavailable, stop and ask.
 - Do not present incomplete work as complete.
-- At the end, report: completed work, commits, fix rounds per subtask, validation actually run, remaining Blueprint or Editor steps.
+- At the end, report: completed work, commits, fix rounds per subtask, validation actually run, and the path to `blueprint.md` with its first step.
